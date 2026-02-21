@@ -9,28 +9,33 @@ const app = express();
 app.use(express.static("public"));
 
 
-// ensure downloads folder exists
-if (!fs.existsSync("downloads")) {
+// ✅ ensure downloads folder exists
+const downloadFolder = path.join(__dirname, "downloads");
 
-fs.mkdirSync("downloads");
-
+if (!fs.existsSync(downloadFolder)) {
+fs.mkdirSync(downloadFolder);
 }
 
 
 
-// SEARCH
-
+// ✅ SEARCH
 app.get("/api/search", async (req, res) => {
 
 try {
 
 const q = req.query.q;
 
+if (!q) return res.json([]);
+
 const result = await ytSearch(q);
 
-res.json(result.videos.slice(0, 10));
+const videos = result.videos.slice(0, 10);
 
-} catch {
+res.json(videos);
+
+} catch (err) {
+
+console.log(err);
 
 res.json([]);
 
@@ -40,51 +45,92 @@ res.json([]);
 
 
 
-// DOWNLOAD WITH CACHE
 
+// ✅ DOWNLOAD (FULLY FIXED)
 app.get("/api/download", async (req, res) => {
 
 try {
 
 const url = req.query.url;
 
-const id = Date.now();
+if (!url) {
+return res.status(400).send("No URL provided");
+}
 
-const filePath = path.join(__dirname, "downloads", id + ".mp3");
+
+const fileName = Date.now() + ".mp3";
+
+const filePath = path.join(downloadFolder, fileName);
 
 
-// download first
+// create streams
 
-const stream = ytdl(url, {
+const videoStream = ytdl(url, {
 filter: "audioonly",
-quality: "highestaudio"
+quality: "highestaudio",
+highWaterMark: 1 << 25
 });
 
-stream.pipe(fs.createWriteStream(filePath));
+const fileStream = fs.createWriteStream(filePath);
 
 
-stream.on("end", () => {
+// pipe video → file
 
-res.download(filePath, "RAHL-XMD.mp3", () => {
+videoStream.pipe(fileStream);
 
-// delete after download
 
-fs.unlinkSync(filePath);
+
+// when file fully saved
+
+fileStream.on("finish", () => {
+
+res.download(filePath, "RAHL-XMD.mp3", (err) => {
+
+if (err) {
+console.log("Send error:", err);
+}
+
+
+// delete file after sending
+
+fs.unlink(filePath, (err) => {
+
+if (err) console.log("Delete error:", err);
 
 });
 
 });
 
+});
 
-stream.on("error", () => {
 
-res.send("Download failed");
+
+// errors
+
+videoStream.on("error", (err) => {
+
+console.log("Video error:", err);
+
+res.status(500).send("Download failed");
 
 });
 
-} catch {
 
-res.send("Error");
+fileStream.on("error", (err) => {
+
+console.log("File error:", err);
+
+res.status(500).send("File failed");
+
+});
+
+
+
+} catch (err) {
+
+console.log("General error:", err);
+
+res.status(500).send("Error");
 
 }
 
@@ -92,8 +138,13 @@ res.send("Error");
 
 
 
+
+// ✅ PORT FIX FOR RENDER
+
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () =>
-console.log("RAHL XMD FINAL RUNNING")
-);
+app.listen(PORT, () => {
+
+console.log("RAHL XMD FINAL RUNNING ON PORT " + PORT);
+
+});
