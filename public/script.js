@@ -8,7 +8,7 @@ let data = await res.json();
 
 let html = "";
 
-data.forEach(v => {
+data.forEach(v=>{
 
 html += `
 
@@ -18,11 +18,7 @@ ${v.title}
 
 <br>
 
-<button onclick="play('${v.url}')">
-Play
-</button>
-
-<a href="/api/mp3?url=${v.url}">
+<a href="/api/download?url=${v.url}">
 Download
 </a>
 
@@ -33,14 +29,5 @@ Download
 });
 
 document.getElementById("results").innerHTML = html;
-
-}
-
-
-
-function play(url){
-
-document.getElementById("player").src =
-"/api/stream?url="+url;
 
 }
