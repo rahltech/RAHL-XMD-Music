@@ -1,12 +1,24 @@
 const express = require("express");
 const ytdl = require("ytdl-core");
 const ytSearch = require("yt-search");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 
 app.use(express.static("public"));
 
 
+// ensure downloads folder exists
+if (!fs.existsSync("downloads")) {
+
+fs.mkdirSync("downloads");
+
+}
+
+
+
+// SEARCH
 
 app.get("/api/search", async (req, res) => {
 
@@ -14,19 +26,13 @@ try {
 
 const q = req.query.q;
 
-if (!q) return res.json([]);
-
 const result = await ytSearch(q);
 
-const videos = result.videos.slice(0, 10);
+res.json(result.videos.slice(0, 10));
 
-res.json(videos);
+} catch {
 
-} catch (err) {
-
-console.log(err);
-
-res.status(500).send("Search error");
+res.json([]);
 
 }
 
@@ -34,65 +40,60 @@ res.status(500).send("Search error");
 
 
 
+// DOWNLOAD WITH CACHE
 
-
-app.get("/api/mp3", async (req, res) => {
+app.get("/api/download", async (req, res) => {
 
 try {
 
 const url = req.query.url;
 
-res.header(
-"Content-Disposition",
-'attachment; filename="RAHL-XMD.mp3"'
-);
+const id = Date.now();
 
-res.header("Content-Type", "audio/mpeg");
+const filePath = path.join(__dirname, "downloads", id + ".mp3");
 
-ytdl(url, {
-filter: "audioonly"
-}).pipe(res);
 
-} catch {
+// download first
 
-res.send("Download error");
+const stream = ytdl(url, {
+filter: "audioonly",
+quality: "highestaudio"
+});
 
-}
+stream.pipe(fs.createWriteStream(filePath));
+
+
+stream.on("end", () => {
+
+res.download(filePath, "RAHL-XMD.mp3", () => {
+
+// delete after download
+
+fs.unlinkSync(filePath);
+
+});
 
 });
 
 
+stream.on("error", () => {
 
+res.send("Download failed");
 
-app.get("/api/stream", async (req, res) => {
-
-try {
-
-const url = req.query.url;
-
-res.header("Content-Type", "audio/mpeg");
-
-ytdl(url, {
-filter: "audioonly"
-}).pipe(res);
+});
 
 } catch {
 
-res.send("Stream error");
+res.send("Error");
 
 }
 
 });
-
-
-
 
 
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-
-console.log("RAHL XMD MUSIC RUNNING ON PORT " + PORT);
-
-});
+app.listen(PORT, () =>
+console.log("RAHL XMD FINAL RUNNING")
+);
